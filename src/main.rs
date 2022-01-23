@@ -2,6 +2,9 @@
 
 #[macro_use]
 extern crate rocket;
+#[macro_use]
+extern crate rocket_contrib;
+
 use std::collections::HashMap;
 use std::fs::{self, File};
 
@@ -11,14 +14,17 @@ use jsonwebtoken::{
 };
 use rocket::http::{Cookie, CookieJar, SameSite};
 use rocket::Request;
+use rocket_contrib::databases::diesel;
 use serde::{Deserialize, Serialize};
-use lazy_static::lazy_static;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     sub: String,
     exp: usize,
 }
+
+#[database("sqlite_database")]
+pub struct DbConn(diesel::SqliteConnection);
 
 #[catch(404)]
 fn not_found(req: &Request) -> String {
@@ -27,10 +33,6 @@ fn not_found(req: &Request) -> String {
 
 static PUB_PEM: &[u8] = include_bytes!("../assets/public.pem");
 static PRIV_PEM: &[u8] = include_bytes!("../assets/private.pem");
-
-// lazy_static! {
-//   static ref USER_STATS_MAP: HashMap<String, [i16; 2]> = HashMap::new();
-// }
 
 #[get("/auth/<username>")]
 fn create_jwt<'a>(username: String, jar: &'a CookieJar<'_>) -> Result<String, String> {
@@ -103,6 +105,7 @@ fn get_readme() -> Result<String, String> {
 #[launch]
 fn rocket() -> _ {
     rocket::build()
+        .attach(DbConn::fairing())
         .register("/", catchers![not_found])
         .mount("/", routes![verify, create_jwt, get_readme])
 }
