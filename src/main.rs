@@ -2,19 +2,14 @@
 
 #[macro_use]
 extern crate rocket;
-#[macro_use]
-extern crate rocket_contrib;
-
-use std::collections::HashMap;
 use std::fs::{self, File};
 
 use chrono;
 use jsonwebtoken::{
     decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
 };
-use rocket::http::{Cookie, CookieJar, SameSite};
+use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::Request;
-use rocket_contrib::databases::diesel;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,9 +17,6 @@ struct Claims {
     sub: String,
     exp: usize,
 }
-
-#[database("sqlite_database")]
-pub struct DbConn(diesel::SqliteConnection);
 
 #[catch(404)]
 fn not_found(req: &Request) -> String {
@@ -35,7 +27,7 @@ static PUB_PEM: &[u8] = include_bytes!("../assets/public.pem");
 static PRIV_PEM: &[u8] = include_bytes!("../assets/private.pem");
 
 #[get("/auth/<username>")]
-fn create_jwt<'a>(username: String, jar: &'a CookieJar<'_>) -> Result<String, String> {
+fn create_jwt<'a>(username: String, jar: &'a CookieJar<'_>) -> Result<(Status, String), String> {
     let rsa_priv = EncodingKey::from_rsa_pem(PRIV_PEM).expect("Not a valid RSA key");
     let pub_pem = std::str::from_utf8(&PUB_PEM)
         .expect("Could not convert public RSA key bytes to string")
@@ -54,25 +46,12 @@ fn create_jwt<'a>(username: String, jar: &'a CookieJar<'_>) -> Result<String, St
             .http_only(true)
             .finish(),
     );
-    // let mut user_stats_map_copy = USER_STATS_MAP.clone();
-    // if USER_STATS_MAP.contains_key(&username) {
-    //     if let Some(user_stats) = USER_STATS_MAP.get(&username) {
-    //         let mut user_stats_clone = user_stats.clone();
-    //         let auth_stats = user_stats_clone.get_mut(0).unwrap();
-    //         *auth_stats += 1;
-    //         user_stats_map_copy.insert(username, [*auth_stats, *user_stats_clone.get(1).unwrap()]);
-    //     } else {
-    //         return Err("Could not find username in stats map".to_string());
-    //     }
-    // } else {
-    //     user_stats_map_copy.insert(username, [1, 0]);
-    // }
     println!("{}", token);
-    Ok(pub_pem)
+    Ok((Status::Ok, pub_pem))
 }
 
 #[get("/verify")]
-fn verify(jar: &CookieJar<'_>) -> Result<String, String> {
+fn verify(jar: &CookieJar<'_>) -> Result<(Status, String), Status> {
     let token = jar.get("token").unwrap().value().to_string();
     println!("{}", token);
     let rsa_pub = DecodingKey::from_rsa_pem(PUB_PEM).expect("Not a valid RSA key");
@@ -81,19 +60,12 @@ fn verify(jar: &CookieJar<'_>) -> Result<String, String> {
         algorithms: vec![Algorithm::RS256],
         ..Default::default()
     };
-    // println!("{:#?}", state.decoding_key);
-    let token = decode::<Claims>(&token, &rsa_pub, &validation).unwrap_or(TokenData {
-        header: Header::new(Algorithm::RS256),
-        claims: Claims {
-            sub: "Signature Invalid".to_string(),
-            exp: 1000000000,
-        },
-    });
-    if token.claims.sub == "Signature Invalid" {
-        return Err("Signature Invalid".to_string());
+    if let Ok(token) = decode::<Claims>(&token, &rsa_pub, &validation) {
+        println!("{}", token.claims.sub);
+        Ok((Status::Ok, token.claims.sub))
+    } else {
+        Err(Status::Unauthorized)
     }
-    println!("{}", token.claims.sub);
-    Ok(token.claims.sub)
 }
 
 #[get("/README.txt")]
@@ -105,7 +77,6 @@ fn get_readme() -> Result<String, String> {
 #[launch]
 fn rocket() -> _ {
     rocket::build()
-        .attach(DbConn::fairing())
         .register("/", catchers![not_found])
         .mount("/", routes![verify, create_jwt, get_readme])
 }
