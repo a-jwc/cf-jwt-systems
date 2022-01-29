@@ -2,12 +2,10 @@
 
 #[macro_use]
 extern crate rocket;
-use std::fs::{self, File};
+use std::fs;
 
 use chrono;
-use jsonwebtoken::{
-    decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation,
-};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use rocket::http::{Cookie, CookieJar, SameSite, Status};
 use rocket::Request;
 use serde::{Deserialize, Serialize};
@@ -21,6 +19,11 @@ struct Claims {
 #[catch(404)]
 fn not_found(req: &Request) -> String {
     format!("could not find '{}'", req.uri())
+}
+
+#[catch(401)]
+fn unauthorized<'a>(_req: &'a Request) -> &'a str {
+    "Invalid token"
 }
 
 static PUB_PEM: &[u8] = include_bytes!("../assets/public.pem");
@@ -58,7 +61,7 @@ fn verify(jar: &CookieJar<'_>) -> Result<(Status, String), Status> {
     let validation = Validation {
         leeway: 60,
         algorithms: vec![Algorithm::RS256],
-        ..Default::default()
+        ..Validation::default()
     };
     if let Ok(token) = decode::<Claims>(&token, &rsa_pub, &validation) {
         println!("{}", token.claims.sub);
@@ -77,6 +80,6 @@ fn get_readme() -> Result<String, String> {
 #[launch]
 fn rocket() -> _ {
     rocket::build()
-        .register("/", catchers![not_found])
+        .register("/", catchers![not_found, unauthorized])
         .mount("/", routes![verify, create_jwt, get_readme])
 }
