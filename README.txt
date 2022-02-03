@@ -1,6 +1,8 @@
 About:
 This project is a simple social media web application with a simple authentication server to serve a JWT to authenticate a user prior to post creation. The frontend was deployed with Cloudflare Pages and the backend was deployed with Workers. The posts are stored in Cloudflare KV, a key-value store deployed to a global edge network. This project features "flash accounts", where a username would be valid for 24 hours before expiring, forever locking the username from use by anyone.
 
+The frontend features a form for submitting a post and a section below it which lists the posts created. The frontend also features a nonfunctional sidebar for aesthetic purposes for this assignment. 
+
 Questions:
 1. What new knowledge or skills did you take away from this project? If you learned a new language for this assignment, make sure to tell us.
 
@@ -20,4 +22,4 @@ General Assignment
 
 Systems Assignment
 - README.txt end point (This is what you are reading right now and is properly served from the requested GET endpoint!)
-- Integration with General Assignment (I had attempted to integrate the authentication service as directed by the online assingment documentation, but was unable to pass the Systems Assignment Grader for this extra credit portion. As this testing service is a blackbox, I am unsure where I am failing.)
+- Integration with General Assignment (I had attempted to integrate the authentication service as directed by the online assingment documentation, but was unable to pass the Systems Assignment Grader for this extra credit portion. As this testing service is a blackbox, I am not 100% sure where I am failing although I do have my suspicions. )
