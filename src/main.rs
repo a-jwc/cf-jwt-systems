@@ -55,7 +55,10 @@ fn create_jwt<'a>(username: String, jar: &'a CookieJar<'_>) -> Result<(Status, S
 
 #[get("/verify")]
 fn verify(jar: &CookieJar<'_>) -> Result<(Status, String), Status> {
-    let token = jar.get("token").unwrap().value().to_string();
+    let token = match jar.get("token") {
+        Some(c) => c.value().to_string(),
+        None => return Err(Status::BadRequest),
+    };
     println!("{}", token);
     let rsa_pub = DecodingKey::from_rsa_pem(PUB_PEM).expect("Not a valid RSA key");
     let validation = Validation {
