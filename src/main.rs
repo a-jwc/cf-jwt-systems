@@ -30,7 +30,10 @@ static PUB_PEM: &[u8] = include_bytes!("../assets/public.pem");
 static PRIV_PEM: &[u8] = include_bytes!("../assets/private.pem");
 
 #[get("/auth/<username>")]
-fn create_jwt<'a>(username: String, jar: &'a CookieJar<'_>) -> Result<(Status, String), String> {
+fn create_jwt<'a>(
+    username: String,
+    jar: &'a CookieJar<'_>,
+) -> Result<(Status, String), (Status, String)> {
     let rsa_priv = EncodingKey::from_rsa_pem(PRIV_PEM).expect("Not a valid RSA key");
     let pub_pem = std::str::from_utf8(&PUB_PEM)
         .expect("Could not convert public RSA key bytes to string")
@@ -40,8 +43,15 @@ fn create_jwt<'a>(username: String, jar: &'a CookieJar<'_>) -> Result<(Status, S
         sub: username.clone(),
         exp,
     };
-    let token =
-        encode(&Header::new(Algorithm::RS256), &my_claims, &rsa_priv).expect("Failed at encode");
+    let token = match encode(&Header::new(Algorithm::RS256), &my_claims, &rsa_priv) {
+        Ok(t) => t,
+        Err(e) => {
+            return Err((
+                Status::FailedDependency,
+                format!("Unable to encode. Error: {}", e),
+            ))
+        }
+    };
     jar.add(
         Cookie::build("token", token.clone())
             .same_site(SameSite::None)
@@ -49,15 +59,14 @@ fn create_jwt<'a>(username: String, jar: &'a CookieJar<'_>) -> Result<(Status, S
             .http_only(true)
             .finish(),
     );
-    println!("{}", token);
     Ok((Status::Ok, pub_pem))
 }
 
 #[get("/verify")]
-fn verify(jar: &CookieJar<'_>) -> Result<(Status, String), Status> {
+fn verify(jar: &CookieJar<'_>) -> Result<(Status, String), (Status, String)> {
     let token = match jar.get("token") {
         Some(c) => c.value().to_string(),
-        None => return Err(Status::BadRequest),
+        None => return Err((Status::BadRequest, "Could not get token cookie".to_string())),
     };
     println!("{}", token);
     let rsa_pub = DecodingKey::from_rsa_pem(PUB_PEM).expect("Not a valid RSA key");
@@ -70,7 +79,7 @@ fn verify(jar: &CookieJar<'_>) -> Result<(Status, String), Status> {
         println!("{}", token.claims.sub);
         Ok((Status::Ok, token.claims.sub))
     } else {
-        Err(Status::Unauthorized)
+        Err((Status::Unauthorized, "Could not verify user".to_string()))
     }
 }
 
